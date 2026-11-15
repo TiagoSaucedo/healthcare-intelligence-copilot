@@ -1,7 +1,15 @@
+
 import re
+from typing import ClassVar
 
 import pandas as pd
 
+from app.analytics.services.common import (
+    normalize_numeric_columns,
+    safe_divide,
+    safe_sum,
+    validate_required_columns,
+)
 from app.database.repositories.contract_repository import (
     ContractRepository,
 )
@@ -14,6 +22,25 @@ class ContractAnalyticsService:
     Centraliza regras de negócio e prepara os dados para
     consumo dos agentes analíticos.
     """
+
+    REQUIRED_COLUMNS: ClassVar[list[str]] = [
+        "id_contrato",
+        "quantidade_itens",
+        "quantidade_contas",
+        "quantidade_beneficiarios",
+        "quantidade_procedimentos",
+        "valor_total_apresentado",
+        "valor_total_pago",
+    ]
+
+    NUMERIC_COLUMNS: ClassVar[list[str]] = [
+        "quantidade_itens",
+        "quantidade_contas",
+        "quantidade_beneficiarios",
+        "quantidade_procedimentos",
+        "valor_total_apresentado",
+        "valor_total_pago",
+    ]
 
     def __init__(
         self,
@@ -92,11 +119,34 @@ class ContractAnalyticsService:
                 "valor_medio_por_conta": None,
             }
 
-        despesa_apresentada = df["valor_total_apresentado"].sum()
-        despesa_paga = df["valor_total_pago"].sum()
+        validate_required_columns(df, self.REQUIRED_COLUMNS)
 
-        total_itens = df["quantidade_itens"].sum()
-        total_contas = df["quantidade_contas"].sum()
+        df = normalize_numeric_columns(
+            df,
+            self.NUMERIC_COLUMNS,
+        )
+
+        despesa_apresentada = safe_sum(
+            df["valor_total_apresentado"]
+        )
+        despesa_paga = safe_sum(df["valor_total_pago"])
+        total_itens = safe_sum(df["quantidade_itens"])
+        total_contas = safe_sum(df["quantidade_contas"])
+        total_beneficiarios = safe_sum(
+            df["quantidade_beneficiarios"]
+        )
+        total_procedimentos = safe_sum(
+            df["quantidade_procedimentos"]
+        )
+
+        media_por_item = safe_divide(
+            despesa_apresentada,
+            total_itens,
+        )
+        media_por_conta = safe_divide(
+            despesa_apresentada,
+            total_contas,
+        )
 
         return {
             "periodo_inicial": start_month,
@@ -104,32 +154,44 @@ class ContractAnalyticsService:
             "quantidade_contratos": int(
                 df["id_contrato"].nunique()
             ),
-            "quantidade_itens": int(total_itens),
-            "quantidade_contas": int(total_contas),
-            "quantidade_beneficiarios": int(
-                df["quantidade_beneficiarios"].sum()
+            "quantidade_itens": (
+                int(total_itens)
+                if total_itens is not None
+                else None
             ),
-            "quantidade_procedimentos": int(
-                df["quantidade_procedimentos"].sum()
+            "quantidade_contas": (
+                int(total_contas)
+                if total_contas is not None
+                else None
             ),
-            "despesa_apresentada_total": round(
-                float(despesa_apresentada), 2
+            "quantidade_beneficiarios": (
+                int(total_beneficiarios)
+                if total_beneficiarios is not None
+                else None
             ),
-            "despesa_paga_total": round(
-                float(despesa_paga), 2
+            "quantidade_procedimentos": (
+                int(total_procedimentos)
+                if total_procedimentos is not None
+                else None
+            ),
+            "despesa_apresentada_total": (
+                round(despesa_apresentada, 2)
+                if despesa_apresentada is not None
+                else None
+            ),
+            "despesa_paga_total": (
+                round(despesa_paga, 2)
+                if despesa_paga is not None
+                else None
             ),
             "valor_medio_por_item": (
-                round(
-                    float(despesa_apresentada / total_itens), 2
-                )
-                if total_itens > 0
+                round(media_por_item, 2)
+                if media_por_item is not None
                 else None
             ),
             "valor_medio_por_conta": (
-                round(
-                    float(despesa_apresentada / total_contas), 2
-                )
-                if total_contas > 0
+                round(media_por_conta, 2)
+                if media_por_conta is not None
                 else None
             ),
         }

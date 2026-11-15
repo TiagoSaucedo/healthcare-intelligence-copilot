@@ -1,5 +1,4 @@
-
-import pandas as pd
+﻿import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -32,8 +31,25 @@ class ProviderRepository:
         FROM vw_despesa_por_prestador
     """
 
+    PAID_BASE_QUERY = """
+        SELECT
+            ano_mes,
+            id_prestador,
+            codigo_prestador,
+            nome_prestador,
+            tipo_prestador,
+            especialidade,
+            cidade,
+            estado,
+            total_itens_pagos,
+            total_contas_pagas,
+            total_beneficiarios,
+            despesa_paga
+        FROM vw_despesa_paga_por_prestador
+    """
+
     def get_provider_overview(self) -> pd.DataFrame:
-        """Retorna os indicadores por prestador e mês."""
+        """Retorna os indicadores assistenciais por prestador e mês."""
 
         query = text(
             self.BASE_QUERY + """
@@ -55,7 +71,7 @@ class ProviderRepository:
         start_month: str,
         end_month: str,
     ) -> pd.DataFrame:
-        """Retorna os indicadores por prestador em um período."""
+        """Retorna os indicadores assistenciais por prestador em um período."""
 
         if start_month > end_month:
             raise ValueError(
@@ -84,4 +100,58 @@ class ProviderRepository:
         except SQLAlchemyError as exc:
             raise RuntimeError(
                 "Erro ao consultar despesas por prestador no período."
+            ) from exc
+
+    def get_paid_provider_overview(self) -> pd.DataFrame:
+        """Retorna os indicadores de pagamentos por prestador e mês."""
+
+        query = text(
+            self.PAID_BASE_QUERY + """
+            ORDER BY ano_mes, despesa_paga DESC
+            """
+        )
+
+        try:
+            with engine.connect() as connection:
+                return pd.read_sql(query, connection)
+
+        except SQLAlchemyError as exc:
+            raise RuntimeError(
+                "Erro ao consultar pagamentos por prestador."
+            ) from exc
+
+    def get_paid_provider_by_period(
+        self,
+        start_month: str,
+        end_month: str,
+    ) -> pd.DataFrame:
+        """Retorna os pagamentos por prestador no período informado."""
+
+        if start_month > end_month:
+            raise ValueError(
+                "O mês inicial não pode ser posterior ao mês final."
+            )
+
+        query = text(
+            self.PAID_BASE_QUERY + """
+            WHERE ano_mes >= :start_month
+              AND ano_mes <= :end_month
+            ORDER BY ano_mes, despesa_paga DESC
+            """
+        )
+
+        try:
+            with engine.connect() as connection:
+                return pd.read_sql(
+                    query,
+                    connection,
+                    params={
+                        "start_month": start_month,
+                        "end_month": end_month,
+                    },
+                )
+
+        except SQLAlchemyError as exc:
+            raise RuntimeError(
+                "Erro ao consultar pagamentos por prestador no período."
             ) from exc

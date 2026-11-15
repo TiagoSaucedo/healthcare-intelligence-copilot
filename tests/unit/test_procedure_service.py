@@ -1,6 +1,7 @@
+from unittest.mock import Mock
+
 import pandas as pd
 import pytest
-from unittest.mock import Mock
 
 from app.analytics.services.procedure_service import (
     ProcedureAnalyticsService,
@@ -170,3 +171,120 @@ def test_get_procedure_summary_returns_empty_period(
     assert result["despesa_paga_total"] == 0.0
     assert result["valor_medio_por_item"] is None
     assert result["valor_medio_por_unidade"] is None
+
+
+def test_get_procedure_summary_preserves_missing_values(
+    service,
+    mock_repository,
+):
+    """Preserva valores ausentes sem convertê-los em zero."""
+
+    mock_repository.get_procedure_by_period.return_value = (
+        pd.DataFrame(
+            {
+                "id_procedimento": [1, 2],
+                "total_itens": [100, 100],
+                "total_contas": [40, 60],
+                "total_beneficiarios": [30, 45],
+                "quantidade_total": [120, 180],
+                "despesa_apresentada": [None, float("nan")],
+                "despesa_paga": [18_000.00, None],
+            }
+        )
+    )
+
+    result = service.get_procedure_summary(
+        start_month="2028-01",
+        end_month="2028-02",
+    )
+
+    assert result["despesa_apresentada_total"] is None
+    assert result["despesa_paga_total"] == 18_000.00
+    assert result["valor_medio_por_item"] is None
+    assert result["valor_medio_por_unidade"] is None
+
+
+def test_get_procedure_summary_handles_zero_denominators(
+    service,
+    mock_repository,
+):
+    """Retorna None quando os denominadores das médias são zero."""
+
+    mock_repository.get_procedure_by_period.return_value = (
+        pd.DataFrame(
+            {
+                "id_procedimento": [1],
+                "total_itens": [0],
+                "total_contas": [0],
+                "total_beneficiarios": [0],
+                "quantidade_total": [0],
+                "despesa_apresentada": [1000.00],
+                "despesa_paga": [800.00],
+            }
+        )
+    )
+
+    result = service.get_procedure_summary(
+        start_month="2028-01",
+        end_month="2028-02",
+    )
+
+    assert result["valor_medio_por_item"] is None
+    assert result["valor_medio_por_unidade"] is None
+
+
+@pytest.mark.parametrize(
+    "infinite_value",
+    [float("inf"), float("-inf")],
+)
+def test_get_procedure_summary_rejects_infinite_values(
+    service,
+    mock_repository,
+    infinite_value,
+):
+    """Rejeita valores infinitos nas métricas."""
+
+    mock_repository.get_procedure_by_period.return_value = (
+        pd.DataFrame(
+            {
+                "id_procedimento": [1],
+                "total_itens": [100],
+                "total_contas": [40],
+                "total_beneficiarios": [30],
+                "quantidade_total": [120],
+                "despesa_apresentada": [infinite_value],
+                "despesa_paga": [800.00],
+            }
+        )
+    )
+
+    with pytest.raises(ValueError, match="infinitos"):
+        service.get_procedure_summary(
+            start_month="2028-01",
+            end_month="2028-02",
+        )
+
+
+def test_get_procedure_summary_rejects_missing_columns(
+    service,
+    mock_repository,
+):
+    """Rejeita DataFrames sem colunas obrigatórias."""
+
+    mock_repository.get_procedure_by_period.return_value = (
+        pd.DataFrame(
+            {
+                "id_procedimento": [1],
+                "despesa_apresentada": [1000.00],
+            }
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Colunas obrigatórias ausentes",
+    ):
+        service.get_procedure_summary(
+            start_month="2028-01",
+            end_month="2028-02",
+        )

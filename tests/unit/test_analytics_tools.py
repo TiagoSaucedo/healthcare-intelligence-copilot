@@ -9,7 +9,6 @@ from app.analytics.tools import (
     get_provider_summary,
 )
 
-
 START_MONTH = "2028-01"
 END_MONTH = "2028-12"
 

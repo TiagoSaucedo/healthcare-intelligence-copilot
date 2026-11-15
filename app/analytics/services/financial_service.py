@@ -1,8 +1,15 @@
 
 import re
+from typing import ClassVar
 
 import pandas as pd
 
+from app.analytics.services.common import (
+    normalize_numeric_columns,
+    safe_divide,
+    safe_sum,
+    validate_required_columns,
+)
 from app.database.repositories.financial_repository import (
     FinancialRepository,
 )
@@ -12,6 +19,12 @@ class FinancialAnalyticsService:
     """
     Camada de serviços responsável pelas análises financeiras.
     """
+
+    REQUIRED_COLUMNS: ClassVar[list[str]] = [
+        "receita_competencia",
+        "despesa_apresentada_atendimento",
+        "despesa_paga_pagamento",
+    ]
 
     def __init__(
         self,
@@ -84,31 +97,57 @@ class FinancialAnalyticsService:
                 "relacao_paga_receita_pct": None,
             }
 
-        receita_total = df["receita_competencia"].sum()
-        despesa_apresentada = (
-            df["despesa_apresentada_atendimento"].sum()
+        validate_required_columns(df, self.REQUIRED_COLUMNS)
+
+        df = normalize_numeric_columns(
+            df,
+            self.REQUIRED_COLUMNS,
         )
-        despesa_paga = df["despesa_paga_pagamento"].sum()
+
+        receita_total = safe_sum(df["receita_competencia"])
+        despesa_apresentada = safe_sum(
+            df["despesa_apresentada_atendimento"]
+        )
+        despesa_paga = safe_sum(
+            df["despesa_paga_pagamento"]
+        )
+
+        relacao_apresentada = safe_divide(
+            despesa_apresentada,
+            receita_total,
+        )
+        relacao_paga = safe_divide(
+            despesa_paga,
+            receita_total,
+        )
 
         return {
             "periodo_inicial": start_month,
             "periodo_final": end_month,
             "quantidade_meses": len(df),
-            "receita_total": round(float(receita_total), 2),
-            "despesa_apresentada_total": round(
-                float(despesa_apresentada), 2
+            "receita_total": (
+                round(receita_total, 2)
+                if receita_total is not None
+                else None
             ),
-            "despesa_paga_total": round(
-                float(despesa_paga), 2
+            "despesa_apresentada_total": (
+                round(despesa_apresentada, 2)
+                if despesa_apresentada is not None
+                else None
+            ),
+            "despesa_paga_total": (
+                round(despesa_paga, 2)
+                if despesa_paga is not None
+                else None
             ),
             "relacao_apresentada_receita_pct": (
-                round(float(despesa_apresentada / receita_total * 100), 2)
-                if receita_total > 0
+                round(relacao_apresentada * 100, 2)
+                if relacao_apresentada is not None
                 else None
             ),
             "relacao_paga_receita_pct": (
-                round(float(despesa_paga / receita_total * 100), 2)
-                if receita_total > 0
+                round(relacao_paga * 100, 2)
+                if relacao_paga is not None
                 else None
             ),
         }

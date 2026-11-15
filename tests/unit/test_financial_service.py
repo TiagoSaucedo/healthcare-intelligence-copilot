@@ -1,7 +1,8 @@
 
+from unittest.mock import Mock
+
 import pandas as pd
 import pytest
-from unittest.mock import Mock
 
 from app.analytics.services.financial_service import (
     FinancialAnalyticsService,
@@ -169,5 +170,130 @@ def test_get_monthly_overview_rejects_reversed_period(service):
     with pytest.raises(ValueError):
         service.get_monthly_overview_by_period(
             start_month="2028-12",
+            end_month="2028-01",
+        )
+
+def test_get_financial_summary_preserves_missing_values(
+    service,
+    mock_repository,
+):
+    """Preserva valores ausentes durante a consolidação."""
+
+    mock_repository.get_monthly_overview_by_period.return_value = (
+        pd.DataFrame(
+            {
+                "receita_competencia": [None, None],
+                "despesa_apresentada_atendimento": [None, None],
+                "despesa_paga_pagamento": [100.00, None],
+            }
+        )
+    )
+
+    result = service.get_financial_summary(
+        start_month="2028-01",
+        end_month="2028-02",
+    )
+
+    assert result["receita_total"] is None
+    assert result["despesa_apresentada_total"] is None
+    assert result["despesa_paga_total"] == 100.00
+    assert result["relacao_apresentada_receita_pct"] is None
+    assert result["relacao_paga_receita_pct"] is None
+
+
+def test_get_financial_summary_handles_zero_revenue(
+    service,
+    mock_repository,
+):
+    """Evita divisão por zero nos indicadores financeiros."""
+
+    mock_repository.get_monthly_overview_by_period.return_value = (
+        pd.DataFrame(
+            {
+                "receita_competencia": [0.00],
+                "despesa_apresentada_atendimento": [100.00],
+                "despesa_paga_pagamento": [80.00],
+            }
+        )
+    )
+
+    result = service.get_financial_summary(
+        start_month="2028-01",
+        end_month="2028-01",
+    )
+
+    assert result["receita_total"] == 0.00
+    assert result["relacao_apresentada_receita_pct"] is None
+    assert result["relacao_paga_receita_pct"] is None
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("receita_competencia", float("inf")),
+        ("receita_competencia", float("-inf")),
+        ("despesa_apresentada_atendimento", float("inf")),
+        ("despesa_apresentada_atendimento", float("-inf")),
+        ("despesa_paga_pagamento", float("inf")),
+        ("despesa_paga_pagamento", float("-inf")),
+    ],
+)
+def test_get_financial_summary_rejects_infinite_values(
+    service,
+    mock_repository,
+    column,
+    value,
+):
+    """Rejeita valores infinitos nos indicadores financeiros."""
+
+    data = {
+        "receita_competencia": [100_000.00],
+        "despesa_apresentada_atendimento": [80_000.00],
+        "despesa_paga_pagamento": [60_000.00],
+    }
+
+    data[column] = [value]
+
+    mock_repository.get_monthly_overview_by_period.return_value = (
+        pd.DataFrame(data)
+    )
+
+    with pytest.raises(ValueError, match="infinitos"):
+        service.get_financial_summary(
+            start_month="2028-01",
+            end_month="2028-01",
+        )
+
+
+@pytest.mark.parametrize(
+    "missing_column",
+    [
+        "receita_competencia",
+        "despesa_apresentada_atendimento",
+        "despesa_paga_pagamento",
+    ],
+)
+def test_get_financial_summary_rejects_missing_columns(
+    service,
+    mock_repository,
+    missing_column,
+):
+    """Rejeita ausência de colunas obrigatórias."""
+
+    df = pd.DataFrame(
+        {
+            "receita_competencia": [100_000.00],
+            "despesa_apresentada_atendimento": [80_000.00],
+            "despesa_paga_pagamento": [60_000.00],
+        }
+    )
+
+    df = df.drop(columns=[missing_column])
+
+    mock_repository.get_monthly_overview_by_period.return_value = df
+
+    with pytest.raises(ValueError, match="Colunas obrigatórias ausentes"):
+        service.get_financial_summary(
+            start_month="2028-01",
             end_month="2028-01",
         )

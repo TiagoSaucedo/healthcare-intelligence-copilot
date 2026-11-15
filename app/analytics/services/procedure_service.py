@@ -1,7 +1,15 @@
+
 import re
+from typing import ClassVar
 
 import pandas as pd
 
+from app.analytics.services.common import (
+    normalize_numeric_columns,
+    safe_divide,
+    safe_sum,
+    validate_required_columns,
+)
 from app.database.repositories.procedure_repository import (
     ProcedureRepository,
 )
@@ -14,6 +22,25 @@ class ProcedureAnalyticsService:
     Centraliza regras de negócio e prepara os dados para
     consumo dos agentes analíticos.
     """
+
+    REQUIRED_COLUMNS: ClassVar[list[str]] = [
+        "id_procedimento",
+        "despesa_apresentada",
+        "despesa_paga",
+        "total_itens",
+        "total_contas",
+        "total_beneficiarios",
+        "quantidade_total",
+    ]
+
+    NUMERIC_COLUMNS: ClassVar[list[str]] = [
+        "despesa_apresentada",
+        "despesa_paga",
+        "total_itens",
+        "total_contas",
+        "total_beneficiarios",
+        "quantidade_total",
+    ]
 
     def __init__(
         self,
@@ -92,11 +119,34 @@ class ProcedureAnalyticsService:
                 "valor_medio_por_unidade": None,
             }
 
-        despesa_apresentada = df["despesa_apresentada"].sum()
-        despesa_paga = df["despesa_paga"].sum()
+        validate_required_columns(df, self.REQUIRED_COLUMNS)
 
-        total_itens = df["total_itens"].sum()
-        quantidade_total = df["quantidade_total"].sum()
+        df = normalize_numeric_columns(
+            df,
+            self.NUMERIC_COLUMNS,
+        )
+
+        despesa_apresentada = safe_sum(
+            df["despesa_apresentada"]
+        )
+        despesa_paga = safe_sum(df["despesa_paga"])
+        total_itens = safe_sum(df["total_itens"])
+        total_contas = safe_sum(df["total_contas"])
+        total_beneficiarios = safe_sum(
+            df["total_beneficiarios"]
+        )
+        quantidade_total = safe_sum(
+            df["quantidade_total"]
+        )
+
+        media_por_item = safe_divide(
+            despesa_apresentada,
+            total_itens,
+        )
+        media_por_unidade = safe_divide(
+            despesa_apresentada,
+            quantidade_total,
+        )
 
         return {
             "periodo_inicial": start_month,
@@ -104,30 +154,44 @@ class ProcedureAnalyticsService:
             "quantidade_procedimentos": int(
                 df["id_procedimento"].nunique()
             ),
-            "quantidade_itens": int(total_itens),
-            "quantidade_contas": int(df["total_contas"].sum()),
-            "quantidade_beneficiarios": int(
-                df["total_beneficiarios"].sum()
+            "quantidade_itens": (
+                int(total_itens)
+                if total_itens is not None
+                else None
             ),
-            "quantidade_total": float(quantidade_total),
-            "despesa_apresentada_total": round(
-                float(despesa_apresentada), 2
+            "quantidade_contas": (
+                int(total_contas)
+                if total_contas is not None
+                else None
             ),
-            "despesa_paga_total": round(
-                float(despesa_paga), 2
+            "quantidade_beneficiarios": (
+                int(total_beneficiarios)
+                if total_beneficiarios is not None
+                else None
+            ),
+            "quantidade_total": (
+                float(quantidade_total)
+                if quantidade_total is not None
+                else None
+            ),
+            "despesa_apresentada_total": (
+                round(despesa_apresentada, 2)
+                if despesa_apresentada is not None
+                else None
+            ),
+            "despesa_paga_total": (
+                round(despesa_paga, 2)
+                if despesa_paga is not None
+                else None
             ),
             "valor_medio_por_item": (
-                round(
-                    float(despesa_apresentada / total_itens), 2
-                )
-                if total_itens > 0
+                round(media_por_item, 2)
+                if media_por_item is not None
                 else None
             ),
             "valor_medio_por_unidade": (
-                round(
-                    float(despesa_apresentada / quantidade_total), 2
-                )
-                if quantidade_total > 0
+                round(media_por_unidade, 2)
+                if media_por_unidade is not None
                 else None
             ),
         }

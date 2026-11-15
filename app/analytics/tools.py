@@ -1,21 +1,20 @@
 from langchain.tools import tool
 
+from app.analytics.services.contract_service import (
+    ContractAnalyticsService,
+)
 from app.analytics.services.financial_service import (
     FinancialAnalyticsService,
-)
-from app.analytics.services.provider_service import (
-    ProviderAnalyticsService,
 )
 from app.analytics.services.procedure_service import (
     ProcedureAnalyticsService,
 )
-from app.analytics.services.contract_service import (
-    ContractAnalyticsService,
+from app.analytics.services.provider_service import (
+    ProviderAnalyticsService,
 )
 from app.analytics.services.ranking_service import (
     RankingAnalyticsService,
 )
-
 
 financial_service = FinancialAnalyticsService()
 provider_service = ProviderAnalyticsService()

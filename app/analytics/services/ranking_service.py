@@ -1,6 +1,7 @@
 
 import re
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
+from typing import ClassVar
 
 import pandas as pd
 
@@ -15,13 +16,13 @@ class RankingAnalyticsService:
     dos rankings de despesas assistenciais.
     """
 
-    VALID_DIMENSIONS = {
+    VALID_DIMENSIONS: ClassVar[set[str]] = {
         "prestador",
         "procedimento",
         "contrato",
     }
 
-    VALID_METRICS = {
+    VALID_METRICS: ClassVar[set[str]] = {
         "apresentada",
         "paga",
     }
@@ -199,7 +200,7 @@ class RankingAnalyticsService:
             participacao_conjunta = (
                 valor_total_top_n
                 / valor_total_dimensao
-                * Decimal("100")
+                * Decimal(100)
             ).quantize(
                 Decimal("0.01"),
                 rounding=ROUND_HALF_UP,

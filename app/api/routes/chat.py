@@ -1,8 +1,9 @@
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-import logging
 
 logger = logging.getLogger(__name__)
 

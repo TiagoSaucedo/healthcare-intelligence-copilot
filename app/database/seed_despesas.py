@@ -8,7 +8,6 @@ from sqlalchemy import text
 
 from app.database.connection import engine
 
-
 SEED = 42
 
 DATA_INICIAL = date(2024, 1, 1)
@@ -457,7 +456,7 @@ def carregar_despesas() -> None:
     print(f"Itens já existentes: {len(contas_existentes)}")
     print(
         f"Contas geradas: "
-        f"{len(set(d['numero_conta'] for d in despesas))}"
+        f"{len({d['numero_conta'] for d in despesas})}"
     )
 
 

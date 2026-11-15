@@ -1,4 +1,6 @@
 
+from typing import ClassVar
+
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -12,7 +14,7 @@ class RankingRepository:
     de despesas assistenciais do Healthcare Intelligence Copilot.
     """
 
-    RANKING_CONFIG = {
+    RANKING_CONFIG: ClassVar[dict[str, dict[str, str]]] = {
         "prestador": {
             "view": "vw_ranking_despesa_prestador",
             "id_column": "id_prestador",

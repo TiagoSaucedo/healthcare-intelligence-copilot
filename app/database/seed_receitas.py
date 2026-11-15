@@ -7,7 +7,6 @@ from sqlalchemy import text
 
 from app.database.connection import engine
 
-
 SEED = 42
 
 DATA_INICIAL = date(2024, 1, 1)
@@ -58,7 +57,7 @@ def calcular_valor_receita(
     valor_centavos = rng.randint(valor_minimo, valor_maximo)
     valor = Decimal(valor_centavos) * Decimal(str(multiplicador))
 
-    return (valor / Decimal("100")).quantize(Decimal("0.01"))
+    return (valor / Decimal(100)).quantize(Decimal("0.01"))
 
 
 def gerar_receitas() -> list[dict]:

@@ -5,7 +5,6 @@ from sqlalchemy import text
 
 from app.database.connection import engine
 
-
 SEED = 42
 TOTAL_CONTRATOS = 50
 

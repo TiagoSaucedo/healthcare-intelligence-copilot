@@ -75,3 +75,65 @@ def test_get_provider_by_period_rejects_invalid_period(repository):
             start_month="2025-01",
             end_month="2024-01",
         )
+
+
+def test_get_paid_provider_overview_returns_data(repository):
+    """Valida as colunas da visão financeira por prestador."""
+
+    df = repository.get_paid_provider_overview()
+
+    expected_columns = {
+        "ano_mes",
+        "id_prestador",
+        "codigo_prestador",
+        "nome_prestador",
+        "tipo_prestador",
+        "especialidade",
+        "cidade",
+        "estado",
+        "total_itens_pagos",
+        "total_contas_pagas",
+        "total_beneficiarios",
+        "despesa_paga",
+    }
+
+    assert not df.empty
+    assert expected_columns.issubset(set(df.columns))
+
+
+def test_paid_provider_expenses_reconcile_with_financial_view(repository):
+    """Confirma a reconciliação dos pagamentos no ano de 2028."""
+
+    df = repository.get_paid_provider_by_period(
+        start_month="2028-01",
+        end_month="2028-12",
+    )
+
+    assert not df.empty
+    assert df["despesa_paga"].sum() == pytest.approx(
+        2_731_812.12,
+        abs=0.01,
+    )
+
+
+def test_get_paid_provider_by_period(repository):
+    """Valida o filtro mensal da consulta financeira."""
+
+    df = repository.get_paid_provider_by_period(
+        start_month="2028-01",
+        end_month="2028-03",
+    )
+
+    assert not df.empty
+    assert df["ano_mes"].min() >= "2028-01"
+    assert df["ano_mes"].max() <= "2028-03"
+
+
+def test_get_paid_provider_by_period_rejects_invalid_period(repository):
+    """Impede consultas financeiras com período invertido."""
+
+    with pytest.raises(ValueError):
+        repository.get_paid_provider_by_period(
+            start_month="2028-12",
+            end_month="2028-01",
+        )

@@ -1,9 +1,10 @@
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     database_url: str
+
+    api_base_url: str = "http://localhost:8000"
 
     llm_provider: str = "ollama"
 

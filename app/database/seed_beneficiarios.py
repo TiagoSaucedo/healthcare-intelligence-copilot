@@ -11,7 +11,6 @@ from sqlalchemy import text
 
 from app.database.connection import engine
 
-
 # ============================================================
 # CONFIGURAÇÕES
 # ============================================================
