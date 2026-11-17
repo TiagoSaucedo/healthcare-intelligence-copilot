@@ -1,6 +1,6 @@
-
 import re
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -8,6 +8,72 @@ from app.frontend.api_client import (
     APIClientError,
     HealthcareAPIClient,
 )
+
+
+def format_brl(value: float) -> str:
+    formatted = f"{value:,.2f}"
+    formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {formatted}"
+
+
+def format_number(value: int) -> str:
+    return f"{value:,}".replace(",", ".")
+
+
+def format_percentage(value: float) -> str:
+    return f"{value:.2f}".replace(".", ",") + "%"
+
+
+def create_brl_line_chart(dataframe: pd.DataFrame) -> alt.Chart:
+    chart_df = (
+        dataframe.rename_axis("ano_mes")
+        .reset_index()
+        .melt(
+            id_vars="ano_mes",
+            var_name="Indicador",
+            value_name="Valor",
+        )
+    )
+
+    chart_df["Valor formatado"] = chart_df["Valor"].map(format_brl)
+
+    return (
+        alt.Chart(chart_df)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X(
+                "ano_mes:N",
+                sort=None,
+                title=None,
+                axis=alt.Axis(labelAngle=-90),
+            ),
+            y=alt.Y(
+                "Valor:Q",
+                title=None,
+                axis=alt.Axis(
+                    labelExpr="replace(format(datum.value, ',.0f'), /,/g, '.')"
+                ),
+            ),
+            color=alt.Color(
+                "Indicador:N",
+                scale=alt.Scale(
+                    domain=[
+                        "Despesa apresentada",
+                        "Despesa paga",
+                    ],
+                    range=["#7FC4F2", "#0080FF"],
+                ),
+                legend=alt.Legend(title=None),
+            ),
+            tooltip=[
+                alt.Tooltip("ano_mes:N", title="Mês"),
+                alt.Tooltip("Indicador:N", title="Indicador"),
+                alt.Tooltip("Valor formatado:N", title="Valor"),
+            ],
+        )
+        .properties(height=350)
+    )
+
 
 st.set_page_config(
     page_title="Healthcare Intelligence Copilot",
@@ -138,35 +204,36 @@ except APIClientError as exc:
     st.error(f"Erro ao carregar os indicadores de prestadores: {exc}")
     st.stop()
 
+# Visão Financeira
 st.header("Visão Financeira")
 
 col1, col2, col3 = st.columns(3)
 
 col1.metric(
     "Receita total",
-    f"R$ {financial_summary['receita_total']:,.2f}",
+    format_brl(financial_summary["receita_total"]),
 )
 
 col2.metric(
     "Despesa apresentada",
-    f"R$ {financial_summary['despesa_apresentada_total']:,.2f}",
+    format_brl(financial_summary["despesa_apresentada_total"]),
 )
 
 col3.metric(
     "Despesa paga",
-    f"R$ {financial_summary['despesa_paga_total']:,.2f}",
+    format_brl(financial_summary["despesa_paga_total"]),
 )
 
 col4, col5 = st.columns(2)
 
 col4.metric(
     "Relação despesa apresentada / receita",
-    f"{financial_summary['relacao_apresentada_receita_pct']:.2f}%",
+    format_percentage(financial_summary["relacao_apresentada_receita_pct"]),
 )
 
 col5.metric(
     "Relação despesa paga / receita",
-    f"{financial_summary['relacao_paga_receita_pct']:.2f}%",
+    format_percentage(financial_summary["relacao_paga_receita_pct"]),
 )
 
 
@@ -184,18 +251,70 @@ financial_df = financial_df.rename(
     }
 )
 
-st.line_chart(
-    financial_df[
-        [
-            "Receita por competência",
-            "Despesa apresentada",
-            "Despesa paga",
-        ]
-    ]
+financial_chart_df = (
+    financial_df.reset_index()
+    .melt(
+        id_vars="ano_mes",
+        var_name="Indicador",
+        value_name="Valor",
+    )
+)
+
+financial_chart_df["Valor formatado"] = (
+    financial_chart_df["Valor"].map(format_brl)
+)
+
+financial_chart = (
+    alt.Chart(financial_chart_df)
+    .mark_line(point=True)
+    .encode(
+        x=alt.X(
+            "ano_mes:N",
+            sort=None,
+            title=None,
+            axis=alt.Axis(labelAngle=-90),
+        ),
+        y=alt.Y(
+            "Valor:Q",
+            title=None,
+            axis=alt.Axis(
+                labelExpr="replace(format(datum.value, ',.0f'), /,/g, '.')"
+            ),
+        ),
+        color=alt.Color(
+            "Indicador:N",
+            scale=alt.Scale(
+                domain=[
+                    "Despesa apresentada",
+                    "Despesa paga",
+                    "Receita por competência",
+                ],
+                range=["#7FC4F2", "#0080FF", "#FFB6C1"],
+            ),
+            legend=alt.Legend(title=None),
+        ),
+        tooltip=[
+            alt.Tooltip("ano_mes:N", title="Mês"),
+            alt.Tooltip("Indicador:N", title="Indicador"),
+            alt.Tooltip(
+                "Valor formatado:N",
+                title="Valor",
+            ),
+        ],
+    )
+    .properties(
+        height=350,
+    )
+)
+
+st.altair_chart(
+    financial_chart,
+    use_container_width=True,
 )
 
 st.divider()
 
+# Analise de Prestadores
 st.header("Análise de Prestadores")
 
 st.subheader("Visão geral")
@@ -204,29 +323,29 @@ provider_col1, provider_col2, provider_col3 = st.columns(3)
 
 provider_col1.metric(
     "Prestadores",
-    f"{provider_summary['quantidade_prestadores']:,}",
+    format_number(provider_summary["quantidade_prestadores"]),
 )
 
 provider_col2.metric(
     "Itens analisados",
-    f"{provider_summary['quantidade_itens']:,}",
+    format_number(provider_summary["quantidade_itens"]),
 )
 
 provider_col3.metric(
     "Contas analisadas",
-    f"{provider_summary['quantidade_contas']:,}",
+    format_number(provider_summary["quantidade_contas"]),
 )
 
 provider_col4, provider_col5 = st.columns(2)
 
 provider_col4.metric(
     "Despesa apresentada",
-    f"R$ {provider_summary['despesa_apresentada_total']:,.2f}",
+    format_brl(provider_summary["despesa_apresentada_total"]),
 )
 
 provider_col5.metric(
     "Despesa paga",
-    f"R$ {paid_provider_summary['despesa_paga_total']:,.2f}",
+    format_brl(paid_provider_summary["despesa_paga_total"]),
 )
 
 st.subheader("Evolução mensal das despesas")
@@ -255,10 +374,14 @@ provider_expenses_df = pd.concat(
     axis=1,
 ).fillna(0)
 
-st.line_chart(provider_expenses_df)
+st.altair_chart(
+    create_brl_line_chart(provider_expenses_df),
+    use_container_width=True,
+)
 
 st.divider()
 
+# Análise de Procedimentos
 st.header("Análise de Procedimentos")
 
 st.subheader("Visão geral")
@@ -267,29 +390,29 @@ procedure_col1, procedure_col2, procedure_col3 = st.columns(3)
 
 procedure_col1.metric(
     "Procedimentos",
-    f"{procedure_summary['quantidade_procedimentos']:,}",
+    format_number(procedure_summary["quantidade_procedimentos"]),
 )
 
 procedure_col2.metric(
     "Itens analisados",
-    f"{procedure_summary['quantidade_itens']:,}",
+    format_number(procedure_summary["quantidade_itens"]),
 )
 
 procedure_col3.metric(
     "Contas analisadas",
-    f"{procedure_summary['quantidade_contas']:,}",
+    format_number(procedure_summary["quantidade_contas"]),
 )
 
 procedure_col4, procedure_col5 = st.columns(2)
 
 procedure_col4.metric(
     "Despesa apresentada",
-    f"R$ {procedure_summary['despesa_apresentada_total']:,.2f}",
+    format_brl(procedure_summary["despesa_apresentada_total"]),
 )
 
 procedure_col5.metric(
     "Despesa paga",
-    f"R$ {procedure_summary['despesa_paga_total']:,.2f}",
+    format_brl(procedure_summary["despesa_paga_total"]),
 )
 
 st.subheader("Evolução mensal das despesas por procedimento")
@@ -310,10 +433,14 @@ procedure_expenses_df = (
     )
 )
 
-st.line_chart(procedure_expenses_df)
+st.altair_chart(
+    create_brl_line_chart(procedure_expenses_df),
+    use_container_width=True,
+)
 
 st.divider()
 
+# Análise de Contratos
 st.header("Análise de Contratos")
 
 st.subheader("Visão geral")
@@ -322,41 +449,41 @@ contract_col1, contract_col2, contract_col3 = st.columns(3)
 
 contract_col1.metric(
     "Contratos",
-    f"{contract_summary['quantidade_contratos']:,}",
+    format_number(contract_summary["quantidade_contratos"]),
 )
 
 contract_col2.metric(
     "Itens analisados",
-    f"{contract_summary['quantidade_itens']:,}",
+    format_number(contract_summary["quantidade_itens"]),
 )
 
 contract_col3.metric(
     "Contas analisadas",
-    f"{contract_summary['quantidade_contas']:,}",
+    format_number(contract_summary["quantidade_contas"]),
 )
 
 contract_col4, contract_col5 = st.columns(2)
 
 contract_col4.metric(
     "Despesa apresentada",
-    f"R$ {contract_summary['despesa_apresentada_total']:,.2f}",
+    format_brl(contract_summary["despesa_apresentada_total"]),
 )
 
 contract_col5.metric(
     "Despesa paga",
-    f"R$ {contract_summary['despesa_paga_total']:,.2f}",
+    format_brl(contract_summary["despesa_paga_total"]),
 )
 
 contract_col6, contract_col7 = st.columns(2)
 
 contract_col6.metric(
     "Valor médio por item",
-    f"R$ {contract_summary['valor_medio_por_item']:,.2f}",
+    format_brl(contract_summary["valor_medio_por_item"]),
 )
 
 contract_col7.metric(
     "Valor médio por conta",
-    f"R$ {contract_summary['valor_medio_por_conta']:,.2f}",
+    format_brl(contract_summary["valor_medio_por_conta"]),
 )
 
 st.subheader("Evolução mensal das despesas por contrato")
@@ -377,7 +504,10 @@ contract_expenses_df = (
     )
 )
 
-st.line_chart(contract_expenses_df)
+st.altair_chart(
+    create_brl_line_chart(contract_expenses_df),
+    use_container_width=True,
+)
 
 st.divider()
 
@@ -448,6 +578,7 @@ except APIClientError as exc:
     st.error(f"Erro ao carregar o ranking: {exc}")
     st.stop()
 
+# Resumo do ranking
 st.subheader("Resumo do ranking")
 
 ranking_metric_col1, ranking_metric_col2, ranking_metric_col3 = (
@@ -456,38 +587,39 @@ ranking_metric_col1, ranking_metric_col2, ranking_metric_col3 = (
 
 ranking_metric_col1.metric(
     "Entidades analisadas",
-    f"{ranking_summary['quantidade_entidades']:,}",
+    format_number(ranking_summary["quantidade_entidades"]),
 )
 
 ranking_metric_col2.metric(
     "Itens analisados",
-    f"{ranking_summary['quantidade_itens']:,}",
+    format_number(ranking_summary["quantidade_itens"]),
 )
 
 ranking_metric_col3.metric(
     "Despesa total",
-    f"R$ {ranking_summary['valor_total']:,.2f}",
+    format_brl(ranking_summary["valor_total"]),
 )
 
+# Concentração do ranking
 st.subheader("Concentração do ranking")
 
 analysis_col1, analysis_col2, analysis_col3 = st.columns(3)
 
 analysis_col1.metric(
     "Entidades no Top N",
-    f"{ranking_analysis['quantidade_entidades_retornadas']:,}",
+    format_number(ranking_analysis["quantidade_entidades_retornadas"]),
 )
 
 analysis_col2.metric(
     "Despesa do Top N",
-    f"R$ {ranking_analysis['valor_total_top_n']:,.2f}",
+    format_brl(ranking_analysis["valor_total_top_n"]),
 )
 
 analysis_col3.metric(
     "Participação conjunta",
-    f"{ranking_analysis['participacao_conjunta_pct']:.2f}%",
+    format_percentage(ranking_analysis["participacao_conjunta_pct"]),
 )
-
+# Classificação
 st.subheader("Classificação")
 
 if ranking_data:
@@ -515,14 +647,10 @@ if ranking_data:
         ]
     ]
 
-    ranking_df["Despesa"] = ranking_df["Despesa"].map(
-        lambda value: f"R$ {value:,.2f}"
-    )
+    ranking_df["Despesa"] = ranking_df["Despesa"].map(format_brl)
 
     ranking_df["Participação (%)"] = (
-        ranking_df["Participação (%)"].map(
-            lambda value: f"{value:.2f}%"
-        )
+        ranking_df["Participação (%)"].map(format_percentage)
     )
 
     st.dataframe(
